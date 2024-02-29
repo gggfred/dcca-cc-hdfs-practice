@@ -1,0 +1,101 @@
+- name: Insert namenode in /etc/hosts
+  ansible.builtin.shell:
+    cmd: echo '192.168.56.10  namenode' >> /etc/hosts
+
+- name: Insert datanode1 in /etc/hosts
+  ansible.builtin.shell:
+    cmd: echo '192.168.56.11  datanode1' >> /etc/hosts
+
+- name: Insert datanode2 in /etc/hosts
+  ansible.builtin.shell:
+    cmd: echo '192.168.56.12  datanode2' >> /etc/hosts
+
+- name: Create hdfs user
+  user:
+    name: "{{HDFS_USER}}"
+    state: present
+    password: "{{ HDFS_PASSWORD | password_hash('sha512','A512') }}"
+    shell: /bin/bash
+    groups: users, sudo
+
+- name: Create SSH directory
+  file: path="{{HDFS_HOME}}/.ssh" state=directory owner=hdfs group=hdfs
+
+- name: Create dfs directory
+  file: path="{{HDFS_HOME}}/dfs" state=directory owner=hdfs group=hdfs
+
+- name: Create name directory
+  file: path="{{HDFS_HOME}}/dfs/name" state=directory owner=hdfs group=hdfs
+
+- name: Create data directory
+  file: path="{{HDFS_HOME}}/dfs/data" state=directory owner=hdfs group=hdfs
+
+- name: apt install required packages
+  apt:
+    update_cache: yes
+    name:
+      - openjdk-11-jdk
+    state: present
+
+# - name: Create remote directory
+#   file: path={{SRC_HOME}} state=directory
+
+# - name: Copy hadoop to vm
+#   copy: src="{{LOCAL_SRC_HOME}}/hadoop-3.3.6/" dest={{SRC_HOME}}/
+
+- name: Extract hadoop-3.3.6.tar.gz into /opt/hadoop
+  ansible.builtin.unarchive:
+    src: "{{LOCAL_SRC_HOME}}/hadoop-3.3.6.tar.gz"
+    dest: /opt
+    owner: "hdfs"
+    group: "hdfs"
+
+- name: Copy id_rsa private key and public one are present
+  ansible.builtin.copy:
+    src: "{{LOCAL_SRC_HOME}}/{{item}}"
+    dest: "{{HDFS_HOME}}/.ssh/{{item}}"
+    mode: 0600
+    owner: hdfs
+    group: hdfs
+  with_items:
+    - id_rsa
+    - id_rsa.pub
+
+- name: Copy Key in authorized_key
+  authorized_key:
+    user: hdfs
+    key: "{{ lookup('file', '{{LOCAL_SRC_HOME}}/id_rsa.pub') }}"
+    state: present
+
+- name: Insert JAVA_HOME in .bashrc
+  ansible.builtin.shell:
+    cmd: echo 'export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"' >> {{HDFS_HOME}}/.bashrc
+
+- name: Insert HADOOP_HOME in .bashrc
+  ansible.builtin.shell:
+    cmd: echo 'export HADOOP_HOME="/opt/hadoop-3.3.6"' >> {{HDFS_HOME}}/.bashrc
+
+- name: Insert HADOOP_HOME in PATH if .bashrc
+  ansible.builtin.shell:
+    cmd: echo 'export PATH=$PATH:$HADOOP_HOME/bin' >> {{HDFS_HOME}}/.bashrc
+
+- name: Hadoop Environmental variables
+  replace:
+    path: /opt/hadoop-3.3.6/etc/hadoop/hadoop-env.sh
+    regexp: '#(\s+)export JAVA_HOME='
+    replace: 'export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"'
+    backup: yes
+
+- name: Hadoop Environmental variables
+  replace:
+    path: /opt/hadoop-3.3.6/etc/hadoop/hadoop-env.sh
+    regexp: '#(\s+)export HADOOP_HOME='
+    replace: 'export HADOOP_HOME="/opt/hadoop-3.3.6"'
+    backup: yes
+
+- name: Config core-site.xml
+  template:
+    src: "core-site.xml.j2"
+    dest: "/opt/hadoop-3.3.6/etc/hadoop/core-site.xml"
+    owner: "{{HDFS_USER}}"
+    group: "{{HDFS_USER}}"

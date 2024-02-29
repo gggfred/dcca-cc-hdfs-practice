@@ -1,0 +1,28 @@
+- name: CC NameNode
+  hosts: namenode
+    #  connection: local
+  become: true
+
+  vars:
+    LOCAL_SRC_HOME: "./src"
+    SRC_HOME: "/opt/hadoop"
+    HDFS_HOME: "/home/hdfs"
+    HDFS_USER: "hdfs"
+    HDFS_PASSWORD: "hdfs"
+    NAMENODE_NAME: 0.0.0.0
+    RESOURCE_NAME_DIR: dfs.namenode.name.dir
+
+  tasks:
+  - import_tasks: common_tasks.yml
+
+  - name: Config hdfs-site.xml
+    template:
+      src: "hdfs-site-namenode.xml.j2"
+      dest: "/opt/hadoop-3.3.6/etc/hadoop/hdfs-site.xml"
+      owner: "{{HDFS_USER}}"
+      group: "{{HDFS_USER}}"
+
+  # - name: Format filesystem
+  #   ansible.builtin.command:
+  #     become: hdfs
+  #     cmd: /opt/hadoop-3.3.6/bin/hdfs namenode -format
